@@ -4,13 +4,13 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from uuid import uuid4
-from models import JSONRPCRequest, JSONRPCResponse
-from wikipedia_service import WikipediaService
-from github_service import GitHubService
-from registry_service import RegistryService
-from fallback_service import FallbackService
-from cache_service import SQLiteCache
-from formatter import Formatter
+from .models import JSONRPCRequest, JSONRPCResponse
+from .wikipedia_service import WikipediaService
+from .github_service import GitHubService
+from .registry_service import RegistryService
+from .fallback_service import FallbackService
+from .cache_service import SQLiteCache
+from .formatter import Formatter
 from fastapi import Query
 
 
