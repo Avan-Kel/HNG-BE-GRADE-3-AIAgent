@@ -1,0 +1,17 @@
+react:
+  name: React
+  purpose: Build component-based UIs
+  usage: JavaScript front-end applications
+  installation: "npm install react react-dom"
+  history: Created by Facebook (Meta) in 2013
+  version: "18.2.0"
+  summary: "React is a declarative, component-driven UI library for building user interfaces."
+
+django:
+  name: Django
+  purpose: Full-stack Python web framework
+  usage: Server-side web apps and APIs
+  installation: "pip install django"
+  history: Created in 2005
+  version: "5.1"
+  summary: "Django helps developers build secure, scalable web applications rapidly."
