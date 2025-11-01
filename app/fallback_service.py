@@ -1,6 +1,8 @@
 import requests
 import re
 from urllib.parse import quote
+from typing import Optional
+
 
 WIKIPEDIA_API = "https://en.wikipedia.org/api/rest_v1/page/summary/"
 GITHUB_SEARCH_API = "https://api.github.com/search/repositories?q={}"
