@@ -7,7 +7,7 @@ WIKIPEDIA_API = "https://en.wikipedia.org/api/rest_v1/page/summary/"
 GITHUB_SEARCH_API = "https://api.github.com/search/repositories?q={}"
 USER_AGENT = {"User-Agent": "FallbackService/1.0"}
 
-WIKI_OVERRIDES = {
+TECH_MAP = {
     "react": "React_(software)",
     "vue": "Vue.js",
     "angular": "Angular_(web_framework)",
@@ -56,14 +56,12 @@ class FallbackService:
 
         return None
 
-
-    def detect_technology_name(self, query: str):
-    query_lower = query.lower()
-    for tech in TECH_KEYWORDS:
-        if tech in query_lower:
-            return WIKI_OVERRIDES.get(tech, tech)
-    match = re.findall(r"[A-Z][a-zA-Z0-9\.\+\-]+", query)
-    return WIKI_OVERRIDES.get(match[0], match[0]) if match else query
+    def detect_technology_name(self, query: str) -> str:
+        query_lower = query.lower()
+        for key, wiki_name in TECH_MAP.items():
+            if key in query_lower:
+                return wiki_name
+        return query
 
     def wikipedia_summary(self, name: str) -> Optional[dict]:
         try:
