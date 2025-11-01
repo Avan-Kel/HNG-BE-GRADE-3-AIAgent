@@ -1,22 +1,35 @@
 import requests
 import re
 from urllib.parse import quote
-import asyncio
 from typing import Optional
 
 WIKIPEDIA_API = "https://en.wikipedia.org/api/rest_v1/page/summary/"
 GITHUB_SEARCH_API = "https://api.github.com/search/repositories?q={}"
 USER_AGENT = {"User-Agent": "FallbackService/1.0"}
 
-TECH_KEYWORDS = [
-    "react", "next.js", "vue", "angular", "svelte",
-    "node.js", "flutter", "django", "laravel",
-    "tailwind", "bootstrap", "express", "flask",
-    "redux", "typescript", "vite", "webpack"
-]
+TECH_MAP = {
+    "react": "React (JavaScript library)",
+    "next": "Next.js",
+    "vue": "Vue.js",
+    "angular": "Angular",
+    "svelte": "Svelte",
+    "node": "Node.js",
+    "flutter": "Flutter",
+    "django": "Django",
+    "laravel": "Laravel",
+    "tailwind": "Tailwind CSS",
+    "bootstrap": "Bootstrap",
+    "express": "Express.js",
+    "flask": "Flask",
+    "redux": "Redux",
+    "typescript": "TypeScript",
+    "vite": "Vite",
+    "webpack": "Webpack"
+}
+
 
 class FallbackService:
-    def __init__(self, github, registry):
+    def __init__(self, github=None, registry=None):
         self.github = github
         self.registry = registry
 
@@ -46,49 +59,48 @@ class FallbackService:
 
     def detect_technology_name(self, query: str) -> str:
         query_lower = query.lower()
-        for tech in TECH_KEYWORDS:
-            if tech in query_lower:
-                return tech
-        # fallback: extract first capitalized word
-        match = re.findall(r"[A-Z][a-zA-Z0-9\.\+\-]+", query)
-        return match[0] if match else query
+        for key, wiki_name in TECH_MAP.items():
+            if key in query_lower:
+                return wiki_name
+        return query
 
-    def wikipedia_summary(self, name: str):
+    def wikipedia_summary(self, name: str) -> Optional[dict]:
         try:
             res = requests.get(WIKIPEDIA_API + quote(name), headers=USER_AGENT, timeout=10)
-            if res.status_code == 200:
-                data = res.json()
-                return {
-                    "summary": data.get("extract"),
-                    "history": data.get("description"),
-                    "wiki_url": data.get("content_urls", {}).get("desktop", {}).get("page")
-                }
-        except:
-            pass
-        return None
+            res.raise_for_status()
+            data = res.json()
+            return {
+                "summary": data.get("extract"),
+                "history": data.get("description"),
+                "wiki_url": data.get("content_urls", {}).get("desktop", {}).get("page")
+            }
+        except requests.RequestException:
+            return None
 
-    def github_readme(self, name: str):
+    def github_readme(self, name: str) -> Optional[dict]:
         try:
             search = requests.get(GITHUB_SEARCH_API.format(name), headers=USER_AGENT, timeout=10)
             items = search.json().get("items", [])
             if not items:
                 return None
 
-            first_repo = items[0]
-            owner = first_repo["owner"]["login"]
-            repo = first_repo["name"]
-
+            # Prefer exact match repo name
+            repo_data = next((r for r in items if r["name"].lower() == name.lower()), items[0])
+            owner = repo_data["owner"]["login"]
+            repo = repo_data["name"]
             readme_url = f"https://raw.githubusercontent.com/{owner}/{repo}/master/README.md"
             readme = requests.get(readme_url, headers=USER_AGENT, timeout=10)
+
             if readme.status_code == 200:
                 text = readme.text
-                install_matches = re.findall(r"(npm install.*|yarn add.*|pip install.*|composer require.*)", text, re.IGNORECASE)
+                install_matches = re.findall(
+                    r"(npm install.*|yarn add.*|pip install.*|composer require.*)", text, re.IGNORECASE
+                )
                 installation = list(set(install_matches))[:5] if install_matches else []
-
                 return {
                     "summary": text[:1000],
                     "installation": installation,
-                    "github_url": first_repo["html_url"]
+                    "github_url": repo_data["html_url"]
                 }
         except:
             return None
@@ -114,22 +126,22 @@ class FallbackService:
             "source": self.detect_source(wiki, github)
         }
 
-    async def get_framework_details(self, query: str):
-        # Detect likely tech keyword
+    def get_framework_details(self, query: str):
+        # Detect proper tech name for Wikipedia
         name = self.detect_technology_name(query)
 
-        # Run Wikipedia and GitHub in parallel
-        loop = asyncio.get_event_loop()
-        wiki_task = loop.run_in_executor(None, self.wikipedia_summary, name)
-        github_task = loop.run_in_executor(None, self.github_readme, name)
-        wiki_data, github_data = await asyncio.gather(wiki_task, github_task)
+        # Fetch data from Wikipedia
+        wikipedia_data = self.wikipedia_summary(name)
 
-        result = self.build_structured_response(name, wiki_data, github_data)
+        # Fetch data from GitHub as fallback
+        github_data = self.github_readme(name)
 
-        # Fallback if nothing found
-        if not wiki_data and not github_data:
-            fallback_text = await self.fetch_text(name)
-            result["usage"] = fallback_text or "No summary available."
-            result["source"] = "wikipedia|registry|github|fallback"
+        # Build structured response
+        result = self.build_structured_response(name, wikipedia_data, github_data)
+
+        # Ultimate fallback
+        if not wikipedia_data and not github_data:
+            result["usage"] = "No summary available. Try using a more specific framework name."
+            result["source"] = "fallback"
 
         return result
