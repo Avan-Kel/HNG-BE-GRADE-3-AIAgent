@@ -15,8 +15,9 @@ TECH_KEYWORDS = [
 
 
 class FallbackService:
-    def __init__(self):
-        pass
+    def __init__(self, github, registry):
+        self.github = github
+        self.registry = registry
 
     def detect_technology_name(self, query: str):
         query_lower = query.lower()
