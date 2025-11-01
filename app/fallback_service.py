@@ -56,6 +56,7 @@ class FallbackService:
 
         return None
 
+
     def detect_technology_name(self, query: str):
     query_lower = query.lower()
     for tech in TECH_KEYWORDS:
