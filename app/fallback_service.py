@@ -3,41 +3,34 @@ import re
 from urllib.parse import quote
 from typing import Optional
 
+
 WIKIPEDIA_API = "https://en.wikipedia.org/api/rest_v1/page/summary/"
 GITHUB_SEARCH_API = "https://api.github.com/search/repositories?q={}"
 USER_AGENT = {"User-Agent": "FallbackService/1.0"}
 
-TECH_MAP = {
-    "react": "React (JavaScript library)",
-    "next": "Next.js",
-    "vue": "Vue.js",
-    "angular": "Angular",
-    "svelte": "Svelte",
-    "node": "Node.js",
-    "flutter": "Flutter",
-    "django": "Django",
-    "laravel": "Laravel",
-    "tailwind": "Tailwind CSS",
-    "bootstrap": "Bootstrap",
-    "express": "Express.js",
-    "flask": "Flask",
-    "redux": "Redux",
-    "typescript": "TypeScript",
-    "vite": "Vite",
-    "webpack": "Webpack"
-}
+TECH_KEYWORDS = [
+    "react", "next.js", "vue", "angular", "svelte",
+    "node.js", "flutter", "django", "laravel",
+    "tailwind", "bootstrap", "express", "flask",
+    "redux", "typescript", "vite", "webpack"
+]
 
 
 class FallbackService:
-    def __init__(self, github=None, registry=None):
+    def __init__(self, github, registry):
         self.github = github
         self.registry = registry
 
     async def fetch_text(self, query: str) -> Optional[str]:
         """
-        Fetch a short description from npm, PyPI, or GitHub README.
+        Try multiple fallbacks:
+        - Try npm description
+        - Try PyPI summary
+        - Try GitHub README if query resembles 'owner/repo'
+        - Return short fallback snippet
         """
-        # 1) Try npm registry
+
+        # 1) Try npm description
         npm = await self.registry.fetch_npm_latest(query)
         if npm and npm.get("description"):
             return npm.get("description")
@@ -53,54 +46,58 @@ class FallbackService:
             owner, repo = owner_repo[0], owner_repo[1]
             readme = await self.github.fetch_readme(owner, repo)
             if readme:
+                # return first 1024 chars
                 return readme[:1024]
 
+        # Nothing found
         return None
 
-    def detect_technology_name(self, query: str) -> str:
+    def detect_technology_name(self, query: str):
         query_lower = query.lower()
-        for key, wiki_name in TECH_MAP.items():
-            if key in query_lower:
-                return wiki_name
-        return query
+        for tech in TECH_KEYWORDS:
+            if tech in query_lower:
+                return tech
 
-    def wikipedia_summary(self, name: str) -> Optional[dict]:
+        match = re.findall(r"[A-Z][a-zA-Z0-9\.\+\-]+", query)
+        return match[0] if match else query
+
+    def wikipedia_summary(self, name: str):
         try:
             res = requests.get(WIKIPEDIA_API + quote(name), headers=USER_AGENT, timeout=10)
-            res.raise_for_status()
-            data = res.json()
-            return {
-                "summary": data.get("extract"),
-                "history": data.get("description"),
-                "wiki_url": data.get("content_urls", {}).get("desktop", {}).get("page")
-            }
-        except requests.RequestException:
-            return None
+            if res.status_code == 200:
+                data = res.json()
+                return {
+                    "summary": data.get("extract"),
+                    "history": data.get("description"),
+                    "wiki_url": data.get("content_urls", {}).get("desktop", {}).get("page")
+                }
+        except:
+            pass
+        return None
 
-    def github_readme(self, name: str) -> Optional[dict]:
+    def github_readme(self, name: str):
         try:
             search = requests.get(GITHUB_SEARCH_API.format(name), headers=USER_AGENT, timeout=10)
             items = search.json().get("items", [])
             if not items:
                 return None
 
-            # Prefer exact match repo name
-            repo_data = next((r for r in items if r["name"].lower() == name.lower()), items[0])
-            owner = repo_data["owner"]["login"]
-            repo = repo_data["name"]
+            first_repo = items[0]
+            owner = first_repo["owner"]["login"]
+            repo = first_repo["name"]
+
             readme_url = f"https://raw.githubusercontent.com/{owner}/{repo}/master/README.md"
             readme = requests.get(readme_url, headers=USER_AGENT, timeout=10)
 
             if readme.status_code == 200:
                 text = readme.text
-                install_matches = re.findall(
-                    r"(npm install.*|yarn add.*|pip install.*|composer require.*)", text, re.IGNORECASE
-                )
+                install_matches = re.findall(r"(npm install.*|yarn add.*|pip install.*|composer require.*)", text, re.IGNORECASE)
                 installation = list(set(install_matches))[:5] if install_matches else []
+
                 return {
                     "summary": text[:1000],
                     "installation": installation,
-                    "github_url": repo_data["html_url"]
+                    "github_url": first_repo["html_url"]
                 }
         except:
             return None
@@ -127,21 +124,15 @@ class FallbackService:
         }
 
     def get_framework_details(self, query: str):
-        # Detect proper tech name for Wikipedia
         name = self.detect_technology_name(query)
 
-        # Fetch data from Wikipedia
         wikipedia_data = self.wikipedia_summary(name)
-
-        # Fetch data from GitHub as fallback
         github_data = self.github_readme(name)
 
-        # Build structured response
         result = self.build_structured_response(name, wikipedia_data, github_data)
 
-        # Ultimate fallback
         if not wikipedia_data and not github_data:
-            result["usage"] = "No summary available. Try using a more specific framework name."
+            result["usage"] = "No data found. Provide a clearer name or try again."
             result["source"] = "fallback"
 
         return result
