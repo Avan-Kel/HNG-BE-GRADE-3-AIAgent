@@ -19,7 +19,7 @@ class FallbackService:
         self.github = github
         self.registry = registry
 
-     async def fetch_text(self, query: str) -> Optional[str]:
+    async def fetch_text(self, query: str) -> Optional[str]:
         """
         Try multiple fallbacks:
         - Try npm description
