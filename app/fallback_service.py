@@ -68,6 +68,37 @@ class FallbackService:
         self.github = github
         self.registry = registry
 
+    async def fetch_text(self, query: str) -> Optional[str]:
+        """
+        Try multiple async fallbacks:
+        1) npm registry
+        2) PyPI
+        3) GitHub README if query looks like 'owner/repo'
+        Returns a short snippet or None if nothing found.
+        """
+        # 1) npm
+        if self.registry:
+            npm = await self.registry.fetch_npm_latest(query)
+            if npm and npm.get("description"):
+                return npm["description"]
+
+        # 2) PyPI
+        if self.registry:
+            pypi = await self.registry.fetch_pypi_info(query)
+            if pypi and pypi.get("info") and pypi["info"].get("summary"):
+                return pypi["info"]["summary"]
+
+        # 3) GitHub README
+        if self.github and "/" in query:
+            owner_repo = query.split("/")[:2]
+            owner, repo = owner_repo[0], owner_repo[1]
+            readme = await self.github.fetch_readme(owner, repo)
+            if readme:
+                return readme[:1024]  # limit snippet
+
+        # Nothing found
+        return None
+
     def resolve_term(term: str) -> str:
         term = term.lower().strip()
 
