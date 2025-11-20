@@ -47,6 +47,11 @@ async def lifespan(app: FastAPI):
 
 app.router.lifespan_context = lifespan
 
+@app.get("/")
+def root():
+    return {"message": "The AI Agent is running successfully, check out the docs for more information by adding /docs to the URL"}
+
+
 
 @app.post("/a2a/dev")
 async def a2a_dev(request: Request):
